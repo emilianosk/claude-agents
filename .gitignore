@@ -1,0 +1,32 @@
+# Secrets / local env
+.env
+.env.*.local
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Runtime/generated data
+app/storage/uploads/
+app/storage/results/
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
