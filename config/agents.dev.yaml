@@ -1,0 +1,40 @@
+agents:
+  - name: researcher
+    enabled: true
+    prompt_file: researcher_prompt.md
+    input_datasets:
+      - DATALAKE.KEPLER_HEATMAPS
+      - DATALAKE.DATA_LAKE_CONVERSION
+      - DATALAKE.POS_TRANSACTIONS
+
+  - name: skillset
+    enabled: true
+    prompt_file: skillset_prompt.md
+    input_datasets:
+      - DEPUTY.TEAM_AVAILABILITY
+      - DEPUTY.ROSTER_FORECAST
+
+  - name: strategist
+    enabled: true
+    prompt_file: strategist_prompt.md
+    input_datasets:
+      - DATALAKE.DATA_LAKE_CONVERSION
+      - DATALAKE.POS_TRANSACTIONS
+
+  - name: operator
+    enabled: true
+    prompt_file: operator_prompt.md
+    input_datasets:
+      - DEPUTY.TEAM_AVAILABILITY
+      - DEPUTY.ROSTER_FORECAST
+
+  - name: creative
+    enabled: true
+    prompt_file: creative_prompt.md
+    input_datasets:
+      - DATALAKE.POS_TRANSACTIONS
+      - DATALAKE.KEPLER_HEATMAPS
+
+consensus:
+  prompt_file: consensus_prompt.md
+  min_agents: 3
