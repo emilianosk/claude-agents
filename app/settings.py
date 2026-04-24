@@ -64,9 +64,9 @@ class Settings(BaseSettings):
     anthropic_model: str = Field(default='claude-sonnet-4-5', alias='ANTHROPIC_MODEL')
     anthropic_max_tokens: int = Field(default=2500, alias='ANTHROPIC_MAX_TOKENS')
 
-    query_map_file: str = Field(default='config/query-map.dev.json', alias='QUERY_MAP_FILE')
-    datasets_config_file: str = Field(default='config/datasets.dev.yaml', alias='DATASETS_CONFIG_FILE')
-    agents_config_file: str = Field(default='config/agents.dev.yaml', alias='AGENTS_CONFIG_FILE')
+    query_map_file: str = Field(default='config/query-map.json', alias='QUERY_MAP_FILE')
+    datasets_config_file: str = Field(default='config/datasets.yaml', alias='DATASETS_CONFIG_FILE')
+    agents_config_file: str = Field(default='config/agents.yaml', alias='AGENTS_CONFIG_FILE')
     agent_prompts_dir: str = Field(default='config/prompts', alias='AGENT_PROMPTS_DIR')
 
     @property

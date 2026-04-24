@@ -1,0 +1,32 @@
+{
+  "KEPLER_HEATMAPS": {
+    "query_file": "queries/KEPLER_HEATMAPS.sql"
+  },
+  "DATA_LAKE_CONVERSION": {
+    "query_file": "queries/DATA_LAKE_CONVERSION.sql"
+  },
+  "POS_TRANSACTIONS": {
+    "query_file": "queries/POS_TRANSACTIONS.sql"
+  },
+  "TEAM_AVAILABILITY": {
+    "query_file": "queries/TEAM_AVAILABILITY.sql"
+  },
+  "ROSTER_FORECAST": {
+    "query_file": "queries/ROSTER_FORECAST.sql"
+  },
+  "TARGETS": {
+    "query_file": "queries/TARGETS.sql"
+  },
+  "SERVICEABILITY_MATRIX": {
+    "query_file": "queries/SERVICEABILITY_MATRIX.sql"
+  },
+  "CLINIC_UTILISATION": {
+    "query_file": "queries/CLINIC_UTILISATION.sql"
+  },
+  "NPS_DATA": {
+    "query_file": "queries/NPS_DATA.sql"
+  },
+  "MARKETING_OPS_CALENDAR": {
+    "query_file": "queries/MARKETING_OPS_CALENDAR.sql"
+  }
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -21,11 +22,13 @@ from app.services.csv_profiler import CSVProfiler
 from app.services.databricks_client import DatabricksClient, DatabricksConfig
 from app.services.dataset_catalog_loader import DatasetCatalogLoader, OpenAPILoader
 from app.services.deputy_service import DeputyConfig, DeputyService
+from app.services.derived_features import build_pos_hourly_demand, build_store_piercer_sid_map
 from app.services.run_store import RunStore
 from app.services.salesforce_service import SalesforceConfig, SalesforceService
 from app.settings import Settings, get_settings
 
 router = APIRouter(prefix='/api/v1', tags=['roster-analysis'])
+logger = logging.getLogger(__name__)
 
 
 def get_run_store(settings: Settings = Depends(get_settings)) -> RunStore:
@@ -92,7 +95,9 @@ def salesforce_query(
 
 @router.post('/runs/init', response_model=RunInitResponse)
 def init_run(run_store: RunStore = Depends(get_run_store)) -> RunInitResponse:
-    return RunInitResponse(run_id=run_store.create_run())
+    run_id = run_store.create_run()
+    logger.info('run.init created run_id=%s', run_id)
+    return RunInitResponse(run_id=run_id)
 
 
 @router.post('/upload/{run_id}/{dataset_label}')
@@ -108,6 +113,13 @@ async def upload_dataset(
 
     content = await file.read()
     output_file.write_bytes(content)
+    logger.info(
+        'run.upload stored run_id=%s dataset=%s bytes=%d file=%s',
+        run_id,
+        dataset_label,
+        len(content),
+        output_file,
+    )
 
     return {
         'run_id': run_id,
@@ -124,6 +136,7 @@ def extract_datasets(
     run_store: RunStore = Depends(get_run_store),
 ) -> ExtractResponse:
     run_store.ensure_run(run_id)
+    logger.info('run.extract start run_id=%s requested_datasets=%s', run_id, payload.datasets)
 
     databricks_config = DatabricksConfig(
         host=settings.databricks_host,
@@ -165,6 +178,13 @@ def extract_datasets(
 
             output_file = output_dir / _dataset_to_filename(dataset.key)
             output_file.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(
+                'run.extract dataset.start run_id=%s dataset=%s type=%s service=%s',
+                run_id,
+                dataset.key,
+                dataset.type,
+                dataset.service,
+            )
 
             if dataset.type == 'sql':
                 if dataset.service != 'databricks':
@@ -180,6 +200,13 @@ def extract_datasets(
                 df = pd.DataFrame(rows)
                 df.to_csv(output_file, index=False)
                 row_count = len(df)
+                logger.info(
+                    'run.extract dataset.sql.done run_id=%s dataset=%s rows=%d file=%s',
+                    run_id,
+                    dataset.key,
+                    row_count,
+                    output_file,
+                )
             elif dataset.type == 'api':
                 if dataset.service != 'deputy':
                     raise ValueError(f'Unsupported API service: {dataset.service}')
@@ -190,7 +217,21 @@ def extract_datasets(
 
                 openapi_path = catalog_loader.resolve_path(dataset.openapi_file)
                 openapi_loader = OpenAPILoader(openapi_path)
-                request_body = openapi_loader.get_request_example(dataset.endpoint, dataset.method) or {}
+                request_body = openapi_loader.get_request_example(
+                    dataset.endpoint,
+                    dataset.method,
+                    dataset.example_param,
+                ) or {}
+                if dataset.example_param and not request_body:
+                    raise ValueError(
+                        f'Example param "{dataset.example_param}" not found for endpoint {dataset.endpoint}'
+                    )
+                logger.info(
+                    'run.extract dataset.api.request_example run_id=%s dataset=%s example_param=%s',
+                    run_id,
+                    dataset.key,
+                    dataset.example_param,
+                )
 
                 response = deputy_service.make_request(
                     endpoint=dataset.endpoint,
@@ -216,6 +257,13 @@ def extract_datasets(
                     row_count = 0
 
                 df.to_csv(output_file, index=False)
+                logger.info(
+                    'run.extract dataset.api.done run_id=%s dataset=%s rows=%d file=%s',
+                    run_id,
+                    dataset.key,
+                    row_count,
+                    output_file,
+                )
             else:
                 raise ValueError(f'Unsupported dataset type: {dataset.type}')
 
@@ -228,6 +276,7 @@ def extract_datasets(
                 )
             )
         except Exception as exc:
+            logger.exception('run.extract dataset.error run_id=%s dataset=%s error=%s', run_id, dataset_key, exc)
             results.append(
                 ExtractDatasetResult(
                     dataset=dataset_key,
@@ -236,6 +285,9 @@ def extract_datasets(
                 )
             )
 
+    ok_count = sum(1 for x in results if x.status == 'ok')
+    err_count = sum(1 for x in results if x.status == 'error')
+    logger.info('run.extract finished run_id=%s ok=%d error=%d', run_id, ok_count, err_count)
     return ExtractResponse(run_id=run_id, results=results)
 
 
@@ -248,6 +300,24 @@ def analyze_run(
 ) -> AnalyzeResponse:
     run_store.ensure_run(run_id)
     upload_dir = run_store.get_run_upload_dir(run_id)
+    logger.info('run.analyze start run_id=%s question_len=%d', run_id, len(payload.question or ''))
+
+    # Build derived datasets from already extracted CSVs to avoid re-querying source systems.
+    try:
+        derived_file = build_pos_hourly_demand(upload_dir)
+        logger.info('run.analyze derived_dataset.created run_id=%s file=%s', run_id, derived_file)
+    except FileNotFoundError as exc:
+        logger.info('run.analyze derived_dataset.skipped run_id=%s reason=%s', run_id, exc)
+    except Exception as exc:
+        logger.warning('run.analyze derived_dataset.error run_id=%s error=%s', run_id, exc)
+
+    try:
+        derived_file = build_store_piercer_sid_map(upload_dir)
+        logger.info('run.analyze derived_dataset.created run_id=%s file=%s', run_id, derived_file)
+    except FileNotFoundError as exc:
+        logger.info('run.analyze derived_dataset.skipped run_id=%s reason=%s', run_id, exc)
+    except Exception as exc:
+        logger.warning('run.analyze derived_dataset.error run_id=%s error=%s', run_id, exc)
 
     profiler = CSVProfiler()
 
@@ -260,7 +330,9 @@ def analyze_run(
             available_datasets.append(dataset_key)
 
     if not profiles:
+        logger.warning('run.analyze no_datasets run_id=%s upload_dir=%s', run_id, upload_dir)
         raise HTTPException(status_code=400, detail='No datasets available for analysis in this run')
+    logger.info('run.analyze datasets.ready run_id=%s datasets=%s', run_id, available_datasets)
 
     claude = ClaudeClient(
         api_key=settings.anthropic_api_key,
@@ -273,9 +345,16 @@ def analyze_run(
     )
     orchestrator = AnalysisOrchestrator(claude, config_loader)
     agent_outputs, consensus, final_decision = orchestrator.run(payload.question, profiles)
+    logger.info(
+        'run.analyze orchestrator.done run_id=%s agent_outputs=%d consensus_level=%s',
+        run_id,
+        len(agent_outputs),
+        consensus.get('consensus_level'),
+    )
 
     result_dir = run_store.get_run_result_dir(run_id)
     result_file = orchestrator.write_result_markdown(result_dir, payload.question, agent_outputs, consensus)
+    logger.info('run.analyze result.saved run_id=%s file=%s', run_id, result_file)
 
     return AnalyzeResponse(
         run_id=run_id,

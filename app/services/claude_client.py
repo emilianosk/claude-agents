@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from anthropic import Anthropic
@@ -41,7 +42,8 @@ class ClaudeClient:
         raw = self.ask(system_prompt=system_prompt, user_prompt=user_prompt, model=model)
         parsed = self._parse_json(raw)
         if parsed is None:
-            raise RuntimeError(f'Claude response was not valid JSON: {raw[:400]}')
+            logger.warning('claude.ask_json.invalid_json using_fallback raw_preview=%s', raw[:400])
+            return fallback
         return parsed
 
     def _parse_json(self, content: str) -> dict | None:
@@ -68,3 +70,6 @@ class ClaudeClient:
         if isinstance(data, dict):
             return data
         return None
+
+
+logger = logging.getLogger(__name__)

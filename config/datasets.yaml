@@ -1,0 +1,61 @@
+datasets:
+  - key: DATALAKE.DATA_LAKE_CONVERSION
+    service: databricks
+    type: sql
+    query_file: queries/DATA_LAKE_CONVERSION.sql
+
+  - key: DATALAKE.KEPLER_HOURLY_PAST_4M
+    service: databricks
+    type: sql
+    query_file: queries/KEPLER_HOURLY_PAST_4M.sql
+
+  #- key: DATALAKE.KEPLER_HEATMAPS
+  #  service: databricks
+  #  type: sql
+  #  query_file: queries/KEPLER_HEATMAPS.sql
+
+  - key: DATALAKE.POS_TRANSACTIONS
+    service: databricks
+    type: sql
+    query_file: queries/POS_TRANSACTIONS.sql
+
+
+  - key: DEPUTY.LOCATIONS
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/resource/Company/QUERY
+    example-param: example-stores
+    method: POST
+
+  - key: DEPUTY.TEAM_AVAILABILITY
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/supervise/employee/QUERY
+    example-param: example-piercers
+    method: POST
+
+  - key: DEPUTY.ROSTERS_LAST_4M
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/resource/Roster/QUERY
+    example-param: example-rosters-last-4m
+    method: POST
+
+  - key: DEPUTY.TRAINING_MODULES
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/resource/TrainingModule/QUERY
+    example-param: example-training-modules
+    method: POST
+
+  - key: DEPUTY.EMPLOYEES_TRAINING
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/resource/TrainingRecord/QUERY
+    example-param: example-all-actives
+    method: POST

@@ -1,45 +1,238 @@
 openapi: 3.0.0
 info:
-  title: Deputy
+  title: Deputy Claude
   version: 1.0.0
+  description: ''
 servers:
   - url: '{{DEPUTY_BASE}}'
 paths:
-  /api/v1/supervise/employee/QUERY:
+  /api/v1/resource/Roster/QUERY:
     post:
-      summary: Get Employees
+      summary: Get Rosters
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+          example: Bearer {{ACCESS_TOKEN}}
+      responses: {}
       requestBody:
         content:
           application/json:
-            example:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: object
+                  properties:
+                    s1:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: string
+                          format: date
+                max:
+                  type: integer
+                start:
+                  type: integer
+            example-rosters-last-4m:
+              search:
+                s1:
+                  field: Date
+                  type: ge
+                  data: '2025-12-24'
+              max: 50000
+              start: 0
+  /api/v1/supervise/employee/QUERY:
+    post:
+      summary: Get Employees
+      parameters:
+        - name: Authorization
+          in: header
+          required: false
+          deprecated: false
+          schema: {}
+          example: Bearer {{ACCESS_TOKEN}}
+      responses: {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: object
+                  properties:
+                    s1:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: boolean
+                    s2:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: array
+                          items:
+                            type: integer
+                max:
+                  type: integer
+                start:
+                  type: integer
+            example-piercers:
               search:
                 s1:
                   field: Active
                   type: eq
                   data: true
                 s2:
-                  field: Id
+                  field: Role
                   type: in
-                  data: [2685, 2686]
-              max: 100
+                  data: [84,3,50]
+              max: 1000
               start: 0
-      responses: {}
-  /api/v1/resource/Roster/QUERY:
+            example-all-actives:
+              search:
+                s1:
+                  field: Active
+                  type: eq
+                  data: true
+              max: 1000
+              start: 0
+  /api/v1/resource/Company/QUERY:
     post:
-      summary: Roster for date and location
+      summary: Get  Locations
+      parameters:
+        - name: Authorization
+          in: header
+          required: false
+          deprecated: false
+          schema: {}
+          example: Bearer {{ACCESS_TOKEN}}
+      responses: {}
       requestBody:
         content:
           application/json:
-            example:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: object
+                  properties:
+                    s1:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: boolean
+                    s2:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: boolean
+                max:
+                  type: integer
+                start:
+                  type: integer
+            example-stores:
               search:
                 s1:
-                  field: Date
+                  field: Active
                   type: eq
-                  data: '2025-12-18'
+                  data: true
                 s2:
-                  field: OperationalUnit
-                  type: in
-                  data: [998, 999]
-              max: 500
+                  field: IsPayrollEntity
+                  type: eq
+                  data: false
+                s3:
+                  field: CompanyNumber
+                  type: lk
+                  data: LID_%
+              max: 10000
               start: 0
+  /api/v1/resource/TrainingModule/QUERY:
+    post:
+      summary: Get TrainingModules
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+          example: Bearer {{ACCESS_TOKEN}}
       responses: {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: array
+                  items: {}
+                max:
+                  type: integer
+                offset:
+                  type: integer
+            example-training-modules:
+              search: []
+              max: 10000
+              offset: 0
+  /api/v1/resource/TrainingRecord/QUERY:
+    post:
+      summary: Get EmployeesTraining
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+          example: Bearer {{ACCESS_TOKEN}}
+      responses: {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: object
+                  properties:
+                    s3:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: boolean
+                max:
+                  type: integer
+                start:
+                  type: integer
+            example-all-actives:
+              search:
+                s3:
+                  field: Active
+                  type: eq
+                  data: true
+              max: 25000
+              start: 0

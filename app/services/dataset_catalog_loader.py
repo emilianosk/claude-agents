@@ -17,6 +17,7 @@ class DatasetSpec(BaseModel):
     openapi_file: str | None = None
     endpoint: str | None = None
     method: str | None = None
+    example_param: str | None = Field(default=None, alias='example-param')
 
     @field_validator('key')
     @classmethod
@@ -84,7 +85,7 @@ class OpenAPILoader:
         self.openapi_file = openapi_file
         self.spec = yaml.safe_load(openapi_file.read_text(encoding='utf-8')) or {}
 
-    def get_request_example(self, endpoint: str, method: str) -> dict[str, Any] | None:
+    def get_request_example(self, endpoint: str, method: str, example_param: str | None = None) -> dict[str, Any] | None:
         paths = self.spec.get('paths', {})
         endpoint_node = paths.get(endpoint)
         if not isinstance(endpoint_node, dict):
@@ -100,6 +101,26 @@ class OpenAPILoader:
         if not isinstance(app_json, dict):
             return None
 
+        if example_param:
+            # Non-standard exported specs sometimes put named examples directly under application/json,
+            # e.g. "example-piercers: {...}".
+            if example_param in app_json:
+                selected = self._coerce_example_to_dict(app_json.get(example_param))
+                if selected is not None:
+                    return selected
+
+            examples = app_json.get('examples')
+            if isinstance(examples, dict) and example_param in examples:
+                selected_node = examples.get(example_param)
+                if isinstance(selected_node, dict) and 'value' in selected_node:
+                    selected = self._coerce_example_to_dict(selected_node.get('value'))
+                else:
+                    selected = self._coerce_example_to_dict(selected_node)
+                if selected is not None:
+                    return selected
+
+            return None
+
         example = app_json.get('example')
         if example is None:
             examples = app_json.get('examples')
@@ -107,6 +128,12 @@ class OpenAPILoader:
                 first = next(iter(examples.values()))
                 if isinstance(first, dict):
                     example = first.get('value')
+        if example is None:
+            # Fallback for non-standard keys like "example-foo" directly under application/json.
+            for key, value in app_json.items():
+                if isinstance(key, str) and key.startswith('example-'):
+                    example = value
+                    break
 
         return self._coerce_example_to_dict(example)
 

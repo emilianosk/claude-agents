@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -60,6 +61,7 @@ class DeputyService:
         additional_headers: dict[str, str] | None = None,
     ) -> dict[str, Any] | list[dict[str, Any]] | bool:
         if not self.is_configured():
+            logger.warning('deputy.request.skipped not_configured endpoint=%s', endpoint)
             return False
 
         url = f"{self.config.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
@@ -76,11 +78,15 @@ class DeputyService:
             kwargs['json'] = data
 
         try:
+            logger.info('deputy.request.start method=%s endpoint=%s', method.upper(), endpoint)
             resp = requests.request(method.upper(), url, **kwargs)
             if 200 <= resp.status_code < 300:
+                logger.info('deputy.request.done method=%s endpoint=%s status=%d', method.upper(), endpoint, resp.status_code)
                 return resp.json()
+            logger.error('deputy.request.error method=%s endpoint=%s status=%d', method.upper(), endpoint, resp.status_code)
             return False
         except (requests.RequestException, ValueError):
+            logger.exception('deputy.request.exception method=%s endpoint=%s', method.upper(), endpoint)
             return False
 
     def get_employee_by_id(self, employee_id: int) -> dict[str, Any] | bool:
@@ -253,3 +259,6 @@ class DeputyService:
             'Accept': 'application/json',
             'Content-Type': 'application/json',
         }
+
+
+logger = logging.getLogger(__name__)

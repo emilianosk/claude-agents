@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -23,12 +24,19 @@ class AnalysisOrchestrator:
         enabled_agents = [x for x in config.agents if x.enabled]
         if not enabled_agents:
             raise RuntimeError('No enabled agents found in agents config')
+        logger.info(
+            'orchestrator.start enabled_agents=%s profiles=%d question_len=%d',
+            [x.name for x in enabled_agents],
+            len(profiles),
+            len(question or ''),
+        )
 
         tasks = [
             asyncio.create_task(self._run_single_agent(spec=spec, question=question, profiles=profiles))
             for spec in enabled_agents
         ]
         outputs = await asyncio.gather(*tasks)
+        logger.info('orchestrator.agents.done outputs=%d', len(outputs))
         if len(outputs) < config.consensus.min_agents:
             raise RuntimeError(
                 f'Not enough agent outputs for consensus: got {len(outputs)}, '
@@ -44,9 +52,11 @@ class AnalysisOrchestrator:
         )
 
         final_decision = str(consensus.get('final_recommendation', 'No final recommendation generated.'))
+        logger.info('orchestrator.consensus.done level=%s', consensus.get('consensus_level'))
         return outputs, consensus, final_decision
 
     async def _run_single_agent(self, spec: AgentSpec, question: str, profiles: dict) -> AgentOutput:
+        logger.info('orchestrator.agent.start agent=%s', spec.name)
         prompt_text = self.config_loader.read_prompt(spec.prompt_file or f'{spec.name}_prompt.md')
         schema = spec.output_schema or self._default_agent_schema()
 
@@ -79,6 +89,7 @@ class AnalysisOrchestrator:
             fallback,
             spec.model_override,
         )
+        logger.info('orchestrator.agent.done agent=%s verdict=%s', spec.name, content.get('verdict'))
         return AgentOutput(agent=spec.name, content=content)
 
     async def _run_consensus(
@@ -110,7 +121,7 @@ class AnalysisOrchestrator:
             'unresolved_risks': ['Consensus step used fallback output'],
             'final_recommendation': 'Unable to produce consensus recommendation.',
         }
-
+        logger.info('orchestrator.consensus.start outputs=%d', len(outputs))
         return await asyncio.to_thread(self.claude_client.ask_json, prompt_text, user_prompt, fallback)
 
     def _filter_profiles(self, profiles: dict[str, Any], input_datasets: list[str]) -> dict[str, Any]:
@@ -191,3 +202,6 @@ class AnalysisOrchestrator:
         output_file = run_result_dir / 'analysis_result.md'
         output_file.write_text('\n'.join(lines), encoding='utf-8')
         return output_file
+
+
+logger = logging.getLogger(__name__)

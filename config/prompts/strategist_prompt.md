@@ -13,6 +13,7 @@ Output intent:
 - Timing recommendations with highest leverage.
 - Risk-adjusted view of upcoming period.
 
+
 Rules:
 - Tie each recommendation to evidence in provided data.
 - Highlight uncertainty when context data is missing.
