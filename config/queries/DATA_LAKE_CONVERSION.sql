@@ -51,7 +51,7 @@ final AS (
                 (k.transactions - COALESCE(n.non_store_bookings, 0)) /
                 NULLIF(k.inside - COALESCE(n.non_store_bookings, 0), 0)
             ELSE NULL
-        END AS store_conversion_pct
+        END AS walk_in_conversion_rate_adjusted
     FROM kepler_totals k
     LEFT JOIN non_store_bookings n
         ON k.store = n.store
@@ -60,7 +60,7 @@ final AS (
 
 SELECT *
 FROM final
-WHERE store_conversion_pct IS NOT NULL
+WHERE walk_in_conversion_rate_adjusted IS NOT NULL
 ORDER BY
     store,
     hour_bucket;
