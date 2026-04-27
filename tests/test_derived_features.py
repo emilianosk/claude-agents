@@ -88,9 +88,10 @@ def test_build_pos_hourly_demand_creates_derived_dataset(tmp_path: Path) -> None
 
     assert output_file.exists()
     out = pd.read_csv(output_file)
-    assert 'tx_count' in out.columns
+    assert list(out.columns) == ['location_lid', 'store_name', 'hour', 'sku', 'is_piercing', 'tx_count']
     assert int(out['tx_count'].sum()) == 3
-    assert set(out['CompanyName'].dropna().tolist()) == {'Store A', 'Store B'}
+    assert set(out['store_name'].dropna().tolist()) == {'Store A', 'Store B'}
+    assert set(out['location_lid'].dropna().astype(str).tolist()) == {'1001', '1002'}
 
 
 def test_build_pos_hourly_demand_requires_source_files(tmp_path: Path) -> None:

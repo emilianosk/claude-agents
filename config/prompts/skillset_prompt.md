@@ -4,7 +4,7 @@ Role:
 Workforce serviceability.
 
 Focus:
-- Analyze: DEPUTY.PIERCERS_TEAM, DEPUTY.LOCATIONS, FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS, FEATURES.FROSTERS_LAST_4M, FEATURES.FROSTERS_HOURLY_PATTERNS, FEATURES.STORE_PIERCER_SID_MAP, FEATURES.POS_HOURLY_DEMAND_BY_STORE.
+- Analyze: DEPUTY.PIERCERS_TEAM, DEPUTY.LOCATIONS, FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS, FEATURES.FROSTERS_LAST_4M, FEATURES.FROSTERS_HOURLY_PATTERNS, FEATURES.STORE_PIERCER_SID_MAP, FEATURES.POS_HOURLY_DEMAND_BY_STORE. FEATURES.POS_HOURLY_DEMAND_BY_STORE columns are: `location_lid`, `store_name`, `hour`, `sku`, `is_piercing`, `tx_count`. Use `location_lid` to join with `FEATURES.STORE_PIERCER_SID_MAP.store_lid` and `FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS.location_lid`.
 - Use FEATURES.STORE_PIERCER_SID_MAP to map each piercer (PID) to each trained SID_<SKU> and service name.
 - Treat FEATURES.STORE_PIERCER_SID_MAP as the source of truth for piercer training capability. Its `sid` column contains the SID_<SKU> training code, and its `sku` column contains the SKU with the SID_ prefix removed.
 - Use DEPUTY.PIERCERS_TEAM only for piercer identity, employment/team metadata, and store assignment context when available. Do not infer training capability from DEPUTY.PIERCERS_TEAM.

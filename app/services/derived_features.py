@@ -220,10 +220,11 @@ def build_pos_hourly_demand(run_upload_dir: Path) -> Path:
     merged['is_piercing'] = merged['is_piercing'].astype(str).str.lower().isin({'1', 'true', 'yes', 'y'})
 
     out = (
-        merged.groupby(['CompanyName', 'hour', 'sku', 'is_piercing'], dropna=False)
+        merged.groupby(['CompanyNumber', 'CompanyName', 'hour', 'sku', 'is_piercing'], dropna=False)
         .size()
         .reset_index(name='tx_count')
-        .sort_values(by=['CompanyName', 'hour', 'tx_count'], ascending=[True, True, False])
+        .rename(columns={'CompanyNumber': 'location_lid', 'CompanyName': 'store_name'})
+        .sort_values(by=['store_name', 'hour', 'tx_count'], ascending=[True, True, False])
     )
 
     out_file = run_upload_dir / 'FEATURES.POS_HOURLY_DEMAND_BY_STORE.csv'
