@@ -11,11 +11,14 @@ agents:
     enabled: true
     prompt_file: skillset_prompt.md
     input_datasets:
-      - DEPUTY.TEAM_AVAILABILITY
+      - DEPUTY.PIERCERS_TEAM
       - DEPUTY.LOCATIONS
       - FEATURES.STORE_PIERCER_SID_MAP
       - DEPUTY.ROSTERS_LAST_4M
       - FEATURES.POS_HOURLY_DEMAND_BY_STORE
+      - FEATURES.OPERATIONAL_UNITS_FOR_ROSTERS_ALL
+      - FEATURES.ROSTERS_LAST_4M
+      - FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS
 
  # - name: strategist
  #   enabled: true
@@ -28,7 +31,7 @@ agents:
  #   enabled: true
  #   prompt_file: operator_prompt.md
  #   input_datasets:
- #     - DEPUTY.TEAM_AVAILABILITY
+ #     - DEPUTY.PIERCERS_TEAM
  #     - DEPUTY.ROSTER_FORECAST
 
  # - name: creative
@@ -38,6 +41,7 @@ agents:
  #     - DATALAKE.POS_TRANSACTIONS
  #     - DATALAKE.KEPLER_HEATMAPS
 
-consensus:
-  prompt_file: consensus_prompt.md
-  min_agents: 2
+consensus_profiles:
+  default:
+    prompt_file: consensus_prompt.md
+    min_agents: 2

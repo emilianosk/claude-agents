@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.models.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
-    ExtractDatasetResult,
     ExtractRequest,
     ExtractResponse,
     RunInitResponse,
@@ -18,10 +15,8 @@ from app.models.schemas import (
 from app.services.agent_config_loader import AgentConfigLoader
 from app.services.analysis_orchestrator import AnalysisOrchestrator
 from app.services.claude_client import ClaudeClient
+from app.services.configured_dataset_extractor import ConfiguredDatasetExtractor, _dataset_to_filename
 from app.services.csv_profiler import CSVProfiler
-from app.services.databricks_client import DatabricksClient, DatabricksConfig
-from app.services.dataset_catalog_loader import DatasetCatalogLoader, OpenAPILoader
-from app.services.deputy_service import DeputyConfig, DeputyService
 from app.services.derived_features import build_pos_hourly_demand, build_store_piercer_sid_map
 from app.services.run_store import RunStore
 from app.services.salesforce_service import SalesforceConfig, SalesforceService
@@ -47,11 +42,6 @@ def get_salesforce_service(settings: Settings = Depends(get_settings)) -> Salesf
         ssl_verify=settings.salesforce_ssl_verify,
     )
     return SalesforceService(config)
-
-
-def _dataset_to_filename(dataset_key: str) -> str:
-    safe = dataset_key.replace('/', '_')
-    return f'{safe}.csv'
 
 
 @router.get('/health')
@@ -135,155 +125,9 @@ def extract_datasets(
     settings: Settings = Depends(get_settings),
     run_store: RunStore = Depends(get_run_store),
 ) -> ExtractResponse:
-    run_store.ensure_run(run_id)
     logger.info('run.extract start run_id=%s requested_datasets=%s', run_id, payload.datasets)
-
-    databricks_config = DatabricksConfig(
-        host=settings.databricks_host,
-        token=settings.databricks_token,
-        warehouse_id=settings.databricks_sql_warehouse_id,
-        catalog=settings.databricks_catalog,
-        schema=settings.databricks_schema,
-        wait_timeout=settings.databricks_wait_timeout,
-        ssl_verify=settings.databricks_ssl_verify,
-        oauth_tenant_id=settings.databricks_oauth_tenant_id,
-        oauth_client_id=settings.databricks_oauth_client_id,
-        oauth_client_secret=settings.databricks_oauth_client_secret,
-        oauth_token_url=settings.databricks_oauth_token_url,
-    )
-    databricks_client = DatabricksClient(databricks_config)
-    deputy_service = DeputyService(
-        DeputyConfig(
-            base_url=settings.deputy_base,
-            access_token=settings.deputy_access_token,
-            client_id=settings.deputy_client_id,
-            client_secret=settings.deputy_client_secret,
-            redirect_uri=settings.deputy_redirect_uri,
-            ssl_verify=settings.deputy_ssl_verify,
-            timeout_seconds=settings.deputy_timeout_seconds,
-        )
-    )
-    catalog_loader = DatasetCatalogLoader(settings.datasets_config_file)
-    catalog = catalog_loader.load()
-    output_dir = run_store.get_run_upload_dir(run_id)
-
-    labels = payload.datasets or [x.key for x in catalog.datasets]
-    results: list[ExtractDatasetResult] = []
-
-    for dataset_key in labels:
-        try:
-            dataset = next((x for x in catalog.datasets if x.key == dataset_key), None)
-            if dataset is None:
-                raise KeyError(f'Dataset not found in catalog: {dataset_key}')
-
-            output_file = output_dir / _dataset_to_filename(dataset.key)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(
-                'run.extract dataset.start run_id=%s dataset=%s type=%s service=%s',
-                run_id,
-                dataset.key,
-                dataset.type,
-                dataset.service,
-            )
-
-            if dataset.type == 'sql':
-                if dataset.service != 'databricks':
-                    raise ValueError(f'Unsupported SQL service: {dataset.service}')
-                if not databricks_client.is_configured():
-                    raise RuntimeError('Databricks is not configured')
-                if not dataset.query_file:
-                    raise ValueError(f'Missing query_file for dataset: {dataset.key}')
-
-                query_path = catalog_loader.resolve_path(dataset.query_file)
-                query = query_path.read_text(encoding='utf-8').strip()
-                rows = databricks_client.execute_query(query)
-                df = pd.DataFrame(rows)
-                df.to_csv(output_file, index=False)
-                row_count = len(df)
-                logger.info(
-                    'run.extract dataset.sql.done run_id=%s dataset=%s rows=%d file=%s',
-                    run_id,
-                    dataset.key,
-                    row_count,
-                    output_file,
-                )
-            elif dataset.type == 'api':
-                if dataset.service != 'deputy':
-                    raise ValueError(f'Unsupported API service: {dataset.service}')
-                if not deputy_service.is_configured():
-                    raise RuntimeError('Deputy is not configured')
-                if not dataset.openapi_file or not dataset.endpoint or not dataset.method:
-                    raise ValueError(f'Missing API config for dataset: {dataset.key}')
-
-                openapi_path = catalog_loader.resolve_path(dataset.openapi_file)
-                openapi_loader = OpenAPILoader(openapi_path)
-                request_body = openapi_loader.get_request_example(
-                    dataset.endpoint,
-                    dataset.method,
-                    dataset.example_param,
-                ) or {}
-                if dataset.example_param and not request_body:
-                    raise ValueError(
-                        f'Example param "{dataset.example_param}" not found for endpoint {dataset.endpoint}'
-                    )
-                logger.info(
-                    'run.extract dataset.api.request_example run_id=%s dataset=%s example_param=%s',
-                    run_id,
-                    dataset.key,
-                    dataset.example_param,
-                )
-
-                response = deputy_service.make_request(
-                    endpoint=dataset.endpoint,
-                    data=request_body,
-                    method=dataset.method.upper(),
-                )
-                if response is False:
-                    raise RuntimeError(f'Deputy API request failed for dataset {dataset.key}')
-
-                if isinstance(response, list):
-                    df = pd.DataFrame(response)
-                    row_count = len(df)
-                elif isinstance(response, dict):
-                    records = response.get('records')
-                    if isinstance(records, list):
-                        df = pd.DataFrame(records)
-                        row_count = len(df)
-                    else:
-                        df = pd.DataFrame([response])
-                        row_count = len(df)
-                else:
-                    df = pd.DataFrame([])
-                    row_count = 0
-
-                df.to_csv(output_file, index=False)
-                logger.info(
-                    'run.extract dataset.api.done run_id=%s dataset=%s rows=%d file=%s',
-                    run_id,
-                    dataset.key,
-                    row_count,
-                    output_file,
-                )
-            else:
-                raise ValueError(f'Unsupported dataset type: {dataset.type}')
-
-            results.append(
-                ExtractDatasetResult(
-                    dataset=dataset.key,
-                    status='ok',
-                    rows=row_count,
-                    output_file=str(output_file),
-                )
-            )
-        except Exception as exc:
-            logger.exception('run.extract dataset.error run_id=%s dataset=%s error=%s', run_id, dataset_key, exc)
-            results.append(
-                ExtractDatasetResult(
-                    dataset=dataset_key,
-                    status='error',
-                    error=str(exc),
-                )
-            )
+    extractor = ConfiguredDatasetExtractor(settings, run_store)
+    results = extractor.extract(run_id, payload.datasets)
 
     ok_count = sum(1 for x in results if x.status == 'ok')
     err_count = sum(1 for x in results if x.status == 'error')
@@ -300,7 +144,13 @@ def analyze_run(
 ) -> AnalyzeResponse:
     run_store.ensure_run(run_id)
     upload_dir = run_store.get_run_upload_dir(run_id)
-    logger.info('run.analyze start run_id=%s question_len=%d', run_id, len(payload.question or ''))
+    logger.info(
+        'run.analyze start run_id=%s question_len=%d selected_agents=%s consensus_profile=%s',
+        run_id,
+        len(payload.question or ''),
+        payload.selected_agents,
+        payload.consensus_profile,
+    )
 
     # Build derived datasets from already extracted CSVs to avoid re-querying source systems.
     try:
@@ -344,7 +194,15 @@ def analyze_run(
         prompts_dir=settings.agent_prompts_dir,
     )
     orchestrator = AnalysisOrchestrator(claude, config_loader)
-    agent_outputs, consensus, final_decision = orchestrator.run(payload.question, profiles)
+    try:
+        agent_outputs, consensus, final_decision = orchestrator.run(
+            payload.question,
+            profiles,
+            selected_agents=payload.selected_agents,
+            consensus_profile=payload.consensus_profile,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     logger.info(
         'run.analyze orchestrator.done run_id=%s agent_outputs=%d consensus_level=%s',
         run_id,

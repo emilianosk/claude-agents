@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.models.schemas import AgentOutput
-from app.services.agent_config_loader import AgentConfigLoader, AgentSpec
+from app.services.agent_config_loader import AgentConfigLoader, AgentSpec, AgentsConfig, ConsensusSpec
 from app.services.claude_client import ClaudeClient
 
 
@@ -16,17 +16,31 @@ class AnalysisOrchestrator:
         self.claude_client = claude_client
         self.config_loader = config_loader
 
-    def run(self, question: str, profiles: dict) -> tuple[list[AgentOutput], dict[str, Any], str]:
-        return asyncio.run(self._run_async(question, profiles))
+    def run(
+        self,
+        question: str,
+        profiles: dict,
+        selected_agents: list[str] | None = None,
+        consensus_profile: str = 'default',
+    ) -> tuple[list[AgentOutput], dict[str, Any], str]:
+        return asyncio.run(self._run_async(question, profiles, selected_agents, consensus_profile))
 
-    async def _run_async(self, question: str, profiles: dict) -> tuple[list[AgentOutput], dict[str, Any], str]:
+    async def _run_async(
+        self,
+        question: str,
+        profiles: dict,
+        selected_agents: list[str] | None = None,
+        consensus_profile: str = 'default',
+    ) -> tuple[list[AgentOutput], dict[str, Any], str]:
         config = self.config_loader.load()
-        enabled_agents = [x for x in config.agents if x.enabled]
+        enabled_agents = self._resolve_agents(config, selected_agents)
+        consensus_spec = self._resolve_consensus(config, consensus_profile)
         if not enabled_agents:
             raise RuntimeError('No enabled agents found in agents config')
         logger.info(
-            'orchestrator.start enabled_agents=%s profiles=%d question_len=%d',
+            'orchestrator.start enabled_agents=%s consensus_profile=%s profiles=%d question_len=%d',
             [x.name for x in enabled_agents],
+            consensus_profile,
             len(profiles),
             len(question or ''),
         )
@@ -37,23 +51,56 @@ class AnalysisOrchestrator:
         ]
         outputs = await asyncio.gather(*tasks)
         logger.info('orchestrator.agents.done outputs=%d', len(outputs))
-        if len(outputs) < config.consensus.min_agents:
+        if len(outputs) < consensus_spec.min_agents:
             raise RuntimeError(
                 f'Not enough agent outputs for consensus: got {len(outputs)}, '
-                f'requires at least {config.consensus.min_agents}'
+                f'requires at least {consensus_spec.min_agents}'
             )
 
         consensus = await self._run_consensus(
             question=question,
             profiles=profiles,
             outputs=outputs,
-            prompt_file=config.consensus.prompt_file,
-            schema=config.consensus.output_schema or self._default_consensus_schema(question),
+            prompt_file=consensus_spec.prompt_file,
+            schema=consensus_spec.output_schema or self._default_consensus_schema(question),
         )
 
         final_decision = str(consensus.get('final_recommendation', 'No final recommendation generated.'))
         logger.info('orchestrator.consensus.done level=%s', consensus.get('consensus_level'))
         return outputs, consensus, final_decision
+
+    def _resolve_agents(self, config: AgentsConfig, selected_agents: list[str] | None) -> list[AgentSpec]:
+        agents_by_name = {x.name: x for x in config.agents}
+
+        if selected_agents is None:
+            return [x for x in config.agents if x.enabled]
+
+        requested = [x.strip() for x in selected_agents if x.strip()]
+        if not requested:
+            raise ValueError('selected_agents must include at least one agent name')
+
+        duplicates = sorted({x for x in requested if requested.count(x) > 1})
+        if duplicates:
+            raise ValueError(f'Duplicate selected agent names: {duplicates}')
+
+        unknown = [x for x in requested if x not in agents_by_name]
+        if unknown:
+            raise ValueError(f'Unknown agent names: {unknown}')
+
+        disabled = [x for x in requested if not agents_by_name[x].enabled]
+        if disabled:
+            raise ValueError(f'Selected agents are disabled in config: {disabled}')
+
+        return [agents_by_name[x] for x in requested]
+
+    def _resolve_consensus(self, config: AgentsConfig, consensus_profile: str) -> ConsensusSpec:
+        profile_name = (consensus_profile or 'default').strip()
+        profiles = config.consensus_profiles or {'default': config.consensus}
+
+        if profile_name not in profiles:
+            raise ValueError(f'Unknown consensus profile: {profile_name}')
+
+        return profiles[profile_name]
 
     async def _run_single_agent(self, spec: AgentSpec, question: str, profiles: dict) -> AgentOutput:
         logger.info('orchestrator.agent.start agent=%s', spec.name)

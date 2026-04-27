@@ -33,6 +33,7 @@ class ConsensusSpec(BaseModel):
 class AgentsConfig(BaseModel):
     agents: list[AgentSpec]
     consensus: ConsensusSpec = Field(default_factory=ConsensusSpec)
+    consensus_profiles: dict[str, ConsensusSpec] = Field(default_factory=dict)
 
 
 class AgentConfigLoader:
@@ -45,6 +46,7 @@ class AgentConfigLoader:
             raise FileNotFoundError(f'Agents config file not found: {self.config_file}')
 
         raw = yaml.safe_load(self.config_file.read_text(encoding='utf-8')) or {}
+        raw = self._normalise_consensus_profiles(raw)
         cfg = AgentsConfig.model_validate(raw)
 
         names = [x.name for x in cfg.agents]
@@ -57,6 +59,21 @@ class AgentConfigLoader:
                 agent.prompt_file = f'{agent.name}_prompt.md'
 
         return cfg
+
+    def _normalise_consensus_profiles(self, raw: dict[str, Any]) -> dict[str, Any]:
+        profiles = dict(raw.get('consensus_profiles') or {})
+
+        if raw.get('consensus') and 'default' not in profiles:
+            profiles['default'] = raw['consensus']
+
+        for key, value in raw.items():
+            if key.startswith('consensus-') and isinstance(value, dict) and key not in profiles:
+                profiles[key] = value
+
+        if profiles:
+            raw = dict(raw)
+            raw['consensus_profiles'] = profiles
+        return raw
 
     def read_prompt(self, prompt_file: str) -> str:
         candidates = [

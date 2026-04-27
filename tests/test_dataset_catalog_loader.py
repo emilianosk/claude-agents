@@ -25,7 +25,7 @@ def test_dataset_catalog_loader_reads_api_example_param(tmp_path: Path) -> None:
     catalog_file = tmp_path / 'datasets.yaml'
     catalog_file.write_text(
         'datasets:\n'
-        '  - key: DEPUTY.TEAM_AVAILABILITY\n'
+        '  - key: DEPUTY.PIERCERS_TEAM\n'
         '    service: deputy\n'
         '    type: api\n'
         '    openapi_file: openapi/deputy.yaml\n'

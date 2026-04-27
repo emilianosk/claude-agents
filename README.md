@@ -47,7 +47,7 @@ curl -X POST http://localhost:8084/api/v1/runs/init
 ```bash
 curl -X POST http://localhost:8084/api/v1/extract/<run_id> \
   -H "content-type: application/json" \
-  -d '{"datasets": ["DATALAKE.DATA_LAKE_CONVERSION", "DEPUTY.TEAM_AVAILABILITY"]}'
+  -d '{"datasets": ["DATALAKE.DATA_LAKE_CONVERSION", "DEPUTY.PIERCERS_TEAM"]}'
 ```
 
 3. Upload additional CSV manually (optional):
@@ -65,7 +65,45 @@ curl -X POST http://localhost:8084/api/v1/analyze/<run_id> \
   -d '{"question": "Where are the forward 2-week serviceability risks and what roster changes should we make?"}'
 ```
 
+Select specific agents and one consensus profile for a run:
+
+```bash
+curl -X POST http://localhost:8084/api/v1/analyze/<run_id> \
+  -H "content-type: application/json" \
+  -d '{
+    "question": "Where are the forward 2-week serviceability risks and what roster changes should we make?",
+    "selected_agents": ["researcher", "skillset"],
+    "consensus_profile": "default"
+  }'
+```
+
 Result markdown is written to `app/storage/results/<run_id>/analysis_result.md`.
+
+The same analysis can be run from the command line inside the app environment after datasets exist for the run:
+
+```bash
+python -m app.cli analyze \
+  --run-id <run_id> \
+  --question "Where are the forward 2-week serviceability risks and what roster changes should we make?" \
+  --agents researcher,skillset \
+  --consensus default
+```
+
+When running through Docker, use the same `run_id` folder shown under `app/storage/uploads`:
+
+```bash
+make extract \
+  RUN_ID=95e92a93dc1d \
+  DATASETS=DEPUTY.PIERCERS_TEAM
+
+make analyze \
+  RUN_ID=95e92a93dc1d \
+  QUESTION="Where are the forward 2-week serviceability risks and what roster changes should we make?" \
+  AGENTS=researcher,skillset \
+  CONSENSUS=default
+```
+
+CLI output matches the API response shape by default. Add `--summary` to `python -m app.cli analyze` if you only want the compact JSON summary.
 
 ## Dataset catalog
 
@@ -73,7 +111,7 @@ Use `DATASETS_CONFIG_FILE` in `.env`:
 - `config/datasets.yaml`
 
 Each dataset entry defines:
-- `key` (e.g. `DATALAKE.DATA_LAKE_CONVERSION`, `DEPUTY.TEAM_AVAILABILITY`)
+- `key` (e.g. `DATALAKE.DATA_LAKE_CONVERSION`, `DEPUTY.PIERCERS_TEAM`)
 - `service` (`databricks`, `deputy`)
 - `type` (`sql`, `api`)
 - source details (`query_file` for SQL or `openapi_file` + `endpoint` + `method` for API)
@@ -88,6 +126,10 @@ Use `AGENTS_CONFIG_FILE` in `.env`:
 
 Prompts are loaded from:
 - `config/prompts/<agent>_prompt.md`
+
+Agents are declared once in YAML. Runtime requests can select a subset with `selected_agents` or `--agents`.
+
+Consensus profiles are declared under `consensus_profiles`. Runtime requests select exactly one profile with `consensus_profile` or `--consensus`.
 
 ## Salesforce endpoints
 

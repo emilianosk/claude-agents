@@ -28,12 +28,28 @@ datasets:
     example-param: example-stores
     method: POST
 
-  - key: DEPUTY.TEAM_AVAILABILITY
+  - key: DEPUTY.PIERCERS_TEAM
     service: deputy
     type: api
     openapi_file: openapi/deputy.yaml
     endpoint: /api/v1/supervise/employee/QUERY
     example-param: example-piercers
+    method: POST
+
+  - key: DEPUTY.OPERATIONAL_UNITS_FOR_ROSTERS_STORES
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/resource/OperationalUnit/QUERY
+    example-param: example-operational-units-for-rosters-stores
+    method: POST
+
+  - key: DEPUTY.OPERATIONAL_UNITS_FOR_ROSTERS_MANAGEMENT
+    service: deputy
+    type: api
+    openapi_file: openapi/deputy.yaml
+    endpoint: /api/v1/resource/OperationalUnit/QUERY
+    example-param: example-operational-units-for-rosters-management
     method: POST
 
   - key: DEPUTY.ROSTERS_LAST_4M

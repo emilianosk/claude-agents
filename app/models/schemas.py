@@ -27,6 +27,8 @@ class ExtractResponse(BaseModel):
 class AnalyzeRequest(BaseModel):
     question: str
     include_raw_preview: bool = False
+    selected_agents: list[str] | None = None
+    consensus_profile: str = 'default'
 
 
 class AgentOutput(BaseModel):

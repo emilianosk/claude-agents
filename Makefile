@@ -1,4 +1,6 @@
-.PHONY: up down logs test test-verbose test-debug shell
+.PHONY: up down logs extract features analyze test test-verbose test-debug shell
+
+CONSENSUS ?= default
 
 up:
 	docker compose -f ../docker-compose.yml up --build -d claude-agents
@@ -8,6 +10,15 @@ down:
 
 logs:
 	docker compose -f ../docker-compose.yml logs -f claude-agents
+
+extract:
+	docker compose -f ../docker-compose.yml run --rm -e PYTHONPATH=/app -w /app claude-agents python -m app.cli extract --run-id "$(RUN_ID)" --datasets "$(DATASETS)"
+
+features:
+	docker compose -f ../docker-compose.yml run --rm -e PYTHONPATH=/app -w /app claude-agents python -m app.cli features --run-id "$(RUN_ID)" --features "$(FEATURES)"
+
+analyze:
+	docker compose -f ../docker-compose.yml run --rm -e PYTHONPATH=/app -w /app claude-agents python -m app.cli analyze --run-id "$(RUN_ID)" --question "$(QUESTION)" --agents "$(AGENTS)" --consensus "$(CONSENSUS)"
 
 test:
 	docker compose -f ../docker-compose.yml run --rm -e PYTHONPATH=/app -w /app claude-agents pytest -q

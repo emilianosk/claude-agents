@@ -236,3 +236,68 @@ paths:
                   data: true
               max: 25000
               start: 0
+  /api/v1/resource/OperationalUnit/QUERY:
+    post:
+      summary: Get OperationalUnit for Rosters Store
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+          example: Bearer {{ACCESS_TOKEN}}
+      responses: {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: object
+                  properties:
+                    s1:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: boolean
+                    s2:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        type:
+                          type: string
+                        data:
+                          type: string
+                max:
+                  type: integer
+                start:
+                  type: integer
+            example-operational-units-for-rosters-stores:
+              search:
+                s1:
+                  field: Active
+                  type: eq
+                  data: true
+                s2:
+                  field: OperationalUnitName
+                  type: lk
+                  data: '%(STORE)%'
+              max: 100000
+              start: 0
+            example-operational-units-for-rosters-management:
+              search:
+                s1:
+                  field: Active
+                  type: eq
+                  data: true
+                s2:
+                  field: OperationalUnitName
+                  type: lk
+                  data: '%(MANAGEMENT)%'
+              max: 100000
+              start: 0
