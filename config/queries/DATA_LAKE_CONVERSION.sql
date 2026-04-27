@@ -1,5 +1,6 @@
 WITH filtered_kepler AS (
     SELECT
+        ss.location_id,
         ss.store,
         k.Name,
         date_trunc('HOUR', k.Date_Time) AS hour_bucket,
@@ -29,18 +30,21 @@ non_store_bookings AS (
 
 kepler_totals AS (
     SELECT
+        location_id,
         store,
         hour_bucket,
         SUM(Measures_Transactions) AS transactions,
         SUM(Measures_Inside) AS inside
     FROM filtered_kepler
     GROUP BY
+        location_id,
         store,
         hour_bucket
 ),
 
 final AS (
     SELECT
+        k.location_id,
         k.store,
         k.hour_bucket,
         k.transactions,

@@ -209,7 +209,12 @@ def _load_profiles(upload_dir: Path, include_raw_preview: bool) -> tuple[dict[st
     for csv_path in sorted(upload_dir.glob('*.csv')):
         if csv_path.exists() and csv_path.stat().st_size > 0:
             dataset_key = csv_path.stem
-            profiles[dataset_key] = profiler.profile_csv(csv_path, include_raw_preview=include_raw_preview)
+            is_feature = dataset_key.startswith('FEATURES.')
+            profiles[dataset_key] = profiler.profile_csv(
+                csv_path,
+                include_raw_preview=include_raw_preview or is_feature,
+                include_string_summary=is_feature,
+            )
             available_datasets.append(dataset_key)
 
     return profiles, available_datasets

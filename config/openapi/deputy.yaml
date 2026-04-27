@@ -45,7 +45,7 @@ paths:
                   field: Date
                   type: ge
                   data: '2025-12-24'
-              max: 50000
+              max: 500000
               start: 0
   /api/v1/supervise/employee/QUERY:
     post:
