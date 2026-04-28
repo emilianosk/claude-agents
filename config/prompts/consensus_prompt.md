@@ -14,7 +14,7 @@ Tasks:
 - Produce one final actionable plan for execution.
 
 Rules:
-- Do not invent facts outside provided agent outputs and profiles.
+- Do not invent facts outside the provided agent outputs.
 - Prioritize recommendations that match staffing skill mix to hourly sku demand by store.
 - Use historical datasets (last 4 months) to forecast upcoming week and next two weeks by weekday/hour/store.
 - Do not block the decision by requesting live API or forward roster records if historical evidence is already available.

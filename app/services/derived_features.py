@@ -4,6 +4,60 @@ from pathlib import Path
 
 import pandas as pd
 
+_SA_STORE_NAME_OVERRIDES: dict[str, str] = {
+    'Brookvale': 'Warringah',
+    'Charlestown Kiosk': 'Charlestown',
+    'Elizabeth Kiosk (Cube)': 'Elizabeth Cube',
+    'Erina': 'Erina Cube',
+    'Hay St Mall': 'Hay Street Mall',
+    'Wagga': 'Wagga Wagga',
+}
+
+# Median service duration ~15 min → 4 appointment slots per clinic per hour
+_SLOTS_PER_CLINIC_PER_HOUR = 4
+
+
+def build_kepler_hourly_with_location(run_upload_dir: Path) -> Path:
+    kepler_file = run_upload_dir / 'DATALAKE.KEPLER_HOURLY_PAST_4M.csv'
+    conversion_file = run_upload_dir / 'DATALAKE.DATA_LAKE_CONVERSION.csv'
+
+    missing = [p.name for p in [kepler_file, conversion_file] if not p.exists()]
+    if missing:
+        raise FileNotFoundError(f'Missing required source datasets: {missing}')
+
+    kepler = pd.read_csv(kepler_file)
+    conversion = pd.read_csv(conversion_file)
+
+    missing_kepler = sorted({'Name'} - set(kepler.columns))
+    missing_conversion = sorted({'kepler_store_name', 'location_id'} - set(conversion.columns))
+    if missing_kepler:
+        raise ValueError(f'DATALAKE.KEPLER_HOURLY_PAST_4M missing required columns: {missing_kepler}')
+    if missing_conversion:
+        raise ValueError(f'DATALAKE.DATA_LAKE_CONVERSION missing required columns: {missing_conversion}')
+
+    location_map = (
+        conversion[['kepler_store_name', 'location_id']]
+        .dropna(subset=['kepler_store_name', 'location_id'])
+        .drop_duplicates(subset=['kepler_store_name'])
+    )
+
+    out = kepler.merge(
+        location_map,
+        left_on='Name',
+        right_on='kepler_store_name',
+        how='left',
+    ).drop(columns=['kepler_store_name'])
+
+    # Place location_id right after Name
+    cols = list(kepler.columns)
+    name_idx = cols.index('Name')
+    col_order = cols[:name_idx + 1] + ['location_id'] + cols[name_idx + 1:]
+    out = out[col_order]
+
+    out_file = run_upload_dir / 'FEATURES.KEPLER_HOURLY_PAST_4M.csv'
+    out.to_csv(out_file, index=False)
+    return out_file
+
 
 def build_locations_with_operational_units(run_upload_dir: Path) -> Path:
     loc_file = run_upload_dir / 'DEPUTY.LOCATIONS.csv'
@@ -124,10 +178,13 @@ def build_frosters_last_4m(run_upload_dir: Path) -> Path:
         'Open': 'open',
     }).copy()
 
-    st = pd.to_datetime(out['start_time'], errors='coerce', utc=True)
-    out['day_of_week'] = st.dt.day_name()
-    out['day_of_week_num'] = st.dt.dayofweek
-    out['start_hour'] = st.dt.hour
+    # Use date portion of the roster date for day-of-week (avoids UTC midnight rollover)
+    date_only = pd.to_datetime(out['date'].str[:10], errors='coerce')
+    out['day_of_week'] = date_only.dt.day_name()
+    out['day_of_week_num'] = date_only.dt.dayofweek
+    # Extract local hour from ISO string directly — timestamps have +10:00/+11:00 offsets
+    # that reflect local store time; UTC conversion would shift hours by 10-11h
+    out['start_hour'] = out['start_time'].str.extract(r'T(\d{2}):', expand=False).astype(float).astype('Int64')
 
     col_order = [
         'location_id', 'location_name', 'location_lid',
@@ -320,4 +377,105 @@ def build_store_piercer_sid_map(run_upload_dir: Path) -> Path:
 
     out_file = run_upload_dir / 'FEATURES.STORE_PIERCER_SID_MAP.csv'
     out.to_csv(out_file, index=False)
+    return out_file
+
+
+def build_clinic_hourly_occupancy(run_upload_dir: Path) -> Path:
+    sa_file = run_upload_dir / 'DATALAKE.SERVICE_APPOINTMENTS.csv'
+    loc_file = run_upload_dir / 'FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS.csv'
+
+    missing = [p.name for p in [sa_file, loc_file] if not p.exists()]
+    if missing:
+        raise FileNotFoundError(f'Missing required source datasets: {missing}')
+
+    sa = pd.read_csv(sa_file)
+    loc = pd.read_csv(loc_file)
+
+    req_sa = {'appointment_number', 'scheduled_start_time', 'booking_date',
+              'Service_Territory_Name__c', 'clinic', 'service_id',
+              'total_time', 'is_piercing', 'source'}
+    req_loc = {'location_id', 'location_name', 'location_lid'}
+
+    missing_sa = sorted(req_sa - set(sa.columns))
+    missing_loc_cols = sorted(req_loc - set(loc.columns))
+    if missing_sa:
+        raise ValueError(f'DATALAKE.SERVICE_APPOINTMENTS missing required columns: {missing_sa}')
+    if missing_loc_cols:
+        raise ValueError(f'FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS missing required columns: {missing_loc_cols}')
+
+    sa = sa.copy()
+    sa['store_name'] = sa['Service_Territory_Name__c'].replace(_SA_STORE_NAME_OVERRIDES)
+    sa['is_piercing'] = sa['is_piercing'].astype(str).str.lower().isin({'1', 'true', 'yes', 'y'})
+
+    # Z suffix in these exports is nominal — times reflect local store time, no UTC conversion
+    sa['start_hour'] = pd.to_datetime(sa['scheduled_start_time'], errors='coerce').dt.hour
+    sa = sa.dropna(subset=['start_hour', 'booking_date'])
+    sa['start_hour'] = sa['start_hour'].astype(int)
+
+    # Total distinct clinics per store across all history — physical capacity ceiling
+    clinic_counts = (
+        sa.groupby('store_name')['clinic']
+        .nunique()
+        .reset_index(name='clinic_count')
+    )
+
+    group_keys = ['store_name', 'booking_date', 'start_hour']
+
+    piercing_time = (
+        sa[sa['is_piercing']]
+        .groupby(group_keys)['total_time']
+        .sum()
+        .reset_index(name='total_piercing_time_min')
+    )
+
+    agg = (
+        sa.groupby(group_keys)
+        .agg(
+            unique_appointments=('appointment_number', 'nunique'),
+            piercing_lines=('is_piercing', 'sum'),
+            required_sids=('service_id', lambda x: ','.join(
+                sorted({v for v in x.dropna().astype(str) if v.startswith('SID_')})
+            )),
+            source_online=('source', lambda x: (x == 'Online').sum()),
+            source_call_centre=('source', lambda x: (x == 'Call Centre').sum()),
+            source_store=('source', lambda x: (x == 'Store').sum()),
+        )
+        .reset_index()
+    )
+
+    agg = agg.merge(piercing_time, on=group_keys, how='left')
+    agg['total_piercing_time_min'] = agg['total_piercing_time_min'].fillna(0).astype(int)
+    agg['piercing_lines'] = agg['piercing_lines'].astype(int)
+
+    agg = agg.merge(clinic_counts, on='store_name', how='left')
+    agg['capacity_slots_per_hour'] = agg['clinic_count'] * _SLOTS_PER_CLINIC_PER_HOUR
+    agg['available_slots'] = (agg['capacity_slots_per_hour'] - agg['unique_appointments']).astype(int)
+
+    loc_map = (
+        loc[['location_id', 'location_name', 'location_lid']]
+        .drop_duplicates(subset=['location_name'])
+    )
+    agg = agg.merge(
+        loc_map, left_on='store_name', right_on='location_name', how='left'
+    ).drop(columns=['location_name'])
+
+    booking_dt = pd.to_datetime(agg['booking_date'], errors='coerce')
+    today = pd.Timestamp.today().normalize()
+    agg.insert(3, 'day_of_week', booking_dt.dt.day_name())
+    agg.insert(4, 'day_of_week_num', booking_dt.dt.dayofweek)
+    agg['is_future'] = (booking_dt > today).astype(int)
+
+    col_order = [
+        'location_id', 'location_lid', 'store_name',
+        'booking_date', 'day_of_week', 'day_of_week_num', 'start_hour',
+        'unique_appointments', 'piercing_lines', 'total_piercing_time_min',
+        'clinic_count', 'capacity_slots_per_hour', 'available_slots',
+        'required_sids',
+        'source_online', 'source_call_centre', 'source_store',
+        'is_future',
+    ]
+    agg = agg[col_order].sort_values(by=['store_name', 'booking_date', 'start_hour'])
+
+    out_file = run_upload_dir / 'FEATURES.CLINIC_HOURLY_OCCUPANCY.csv'
+    agg.to_csv(out_file, index=False)
     return out_file

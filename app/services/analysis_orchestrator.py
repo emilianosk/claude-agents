@@ -150,7 +150,6 @@ class AnalysisOrchestrator:
         prompt_text = self.config_loader.read_prompt(prompt_file)
         payload = {
             'question': question,
-            'profiles': profiles,
             'agent_outputs': [{'agent': x.agent, 'content': x.content} for x in outputs],
         }
         user_prompt = (

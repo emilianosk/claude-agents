@@ -19,6 +19,10 @@ datasets:
     type: sql
     query_file: queries/POS_TRANSACTIONS.sql
 
+  - key: DATALAKE.SERVICE_APPOINTMENTS
+    service: databricks
+    type: sql
+    query_file: queries/SERVICE_APPOINTMENTS.sql
 
   - key: DEPUTY.LOCATIONS
     service: deputy

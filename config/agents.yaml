@@ -3,7 +3,7 @@ agents:
     enabled: true
     prompt_file: researcher_prompt.md
     input_datasets:
-      - DATALAKE.KEPLER_HOURLY_PAST_4M
+      - FEATURES.KEPLER_HOURLY_PAST_4M
       - DATALAKE.DATA_LAKE_CONVERSION
       - DATALAKE.POS_TRANSACTIONS
       - FEATURES.FROSTERS_HOURLY_PATTERNS
@@ -18,6 +18,7 @@ agents:
       - FEATURES.FROSTERS_HOURLY_PATTERNS
       - FEATURES.STORE_PIERCER_SID_MAP
       - FEATURES.POS_HOURLY_DEMAND_BY_STORE
+      - FEATURES.CLINIC_HOURLY_OCCUPANCY
 
  # - name: strategist
  #   enabled: true

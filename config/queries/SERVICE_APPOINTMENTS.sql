@@ -1,0 +1,1 @@
+select * from  fact.salesforce_service_appointment where status not in ('Canceled', 'No show') and booking_date >= add_months(current_date(), -4) order by appointment_number, booking_date;

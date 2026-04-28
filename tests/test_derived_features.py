@@ -5,6 +5,7 @@ import pandas as pd
 from app.services.derived_features import (
     build_frosters_hourly_patterns,
     build_frosters_last_4m,
+    build_kepler_hourly_with_location,
     build_locations_with_operational_units,
     build_pos_hourly_demand,
     build_store_piercer_sid_map,
@@ -233,6 +234,40 @@ def test_build_frosters_hourly_patterns_aggregates_correctly(tmp_path: Path) -> 
     assert store_a_row['shift_count'] == 2
     assert store_a_row['unique_employees'] == 2
     assert store_a_row['avg_total_time'] == 7.75
+
+
+def test_build_kepler_hourly_with_location_enriches_with_location_id(tmp_path: Path) -> None:
+    kepler = pd.DataFrame([
+        {'id': 0, 'Name': 'SkinKandy Airport West', 'Date': '2026-01-01', 'Date_Time': '2026-01-01T09:00:00Z', 'Measures_Inside': 10, 'Measures_Transactions': 3},
+        {'id': 0, 'Name': 'SkinKandy Bondi', 'Date': '2026-01-01', 'Date_Time': '2026-01-01T10:00:00Z', 'Measures_Inside': 8, 'Measures_Transactions': 2},
+        {'id': 0, 'Name': 'SkinKandy Unknown', 'Date': '2026-01-01', 'Date_Time': '2026-01-01T11:00:00Z', 'Measures_Inside': 5, 'Measures_Transactions': 1},
+    ])
+    conversion = pd.DataFrame([
+        {'location_id': 'LID_100AU', 'kepler_store_name': 'SkinKandy Airport West', 'hour_bucket': '2026-01-01T09:00:00Z', 'walk_in_conversion_rate_adjusted': 0.3},
+        {'location_id': 'LID_100AU', 'kepler_store_name': 'SkinKandy Airport West', 'hour_bucket': '2026-01-01T10:00:00Z', 'walk_in_conversion_rate_adjusted': 0.4},
+        {'location_id': 'LID_200AU', 'kepler_store_name': 'SkinKandy Bondi', 'hour_bucket': '2026-01-01T10:00:00Z', 'walk_in_conversion_rate_adjusted': 0.5},
+    ])
+    kepler.to_csv(tmp_path / 'DATALAKE.KEPLER_HOURLY_PAST_4M.csv', index=False)
+    conversion.to_csv(tmp_path / 'DATALAKE.DATA_LAKE_CONVERSION.csv', index=False)
+
+    output_file = build_kepler_hourly_with_location(tmp_path)
+    out = pd.read_csv(output_file)
+
+    assert output_file.exists()
+    assert 'location_id' in out.columns
+    assert list(out.columns).index('location_id') == list(out.columns).index('Name') + 1
+    assert len(out) == 3
+    assert out[out['Name'] == 'SkinKandy Airport West']['location_id'].iloc[0] == 'LID_100AU'
+    assert out[out['Name'] == 'SkinKandy Bondi']['location_id'].iloc[0] == 'LID_200AU'
+    assert pd.isna(out[out['Name'] == 'SkinKandy Unknown']['location_id'].iloc[0])
+
+
+def test_build_kepler_hourly_with_location_requires_source_files(tmp_path: Path) -> None:
+    try:
+        build_kepler_hourly_with_location(tmp_path)
+        assert False, 'expected FileNotFoundError'
+    except FileNotFoundError as exc:
+        assert 'DATALAKE.KEPLER_HOURLY_PAST_4M.csv' in str(exc)
 
 
 def test_build_frosters_hourly_patterns_requires_source_file(tmp_path: Path) -> None:

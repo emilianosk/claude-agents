@@ -2,7 +2,7 @@ WITH filtered_kepler AS (
     SELECT
         ss.location_id,
         ss.store,
-        k.Name,
+        k.Name AS kepler_store_name,
         date_trunc('HOUR', k.Date_Time) AS hour_bucket,
         k.Measures_Transactions,
         k.Measures_Inside
@@ -32,6 +32,7 @@ kepler_totals AS (
     SELECT
         location_id,
         store,
+        kepler_store_name,
         hour_bucket,
         SUM(Measures_Transactions) AS transactions,
         SUM(Measures_Inside) AS inside
@@ -39,13 +40,14 @@ kepler_totals AS (
     GROUP BY
         location_id,
         store,
+        kepler_store_name,
         hour_bucket
 ),
 
 final AS (
     SELECT
         k.location_id,
-        k.store,
+        k.kepler_store_name,
         k.hour_bucket,
         k.transactions,
         k.inside,
@@ -66,5 +68,5 @@ SELECT *
 FROM final
 WHERE walk_in_conversion_rate_adjusted IS NOT NULL
 ORDER BY
-    store,
+    kepler_store_name,
     hour_bucket;

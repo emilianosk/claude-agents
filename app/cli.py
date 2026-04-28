@@ -13,8 +13,10 @@ from app.services.claude_client import ClaudeClient
 from app.services.configured_dataset_extractor import ConfiguredDatasetExtractor
 from app.services.csv_profiler import CSVProfiler
 from app.services.derived_features import (
+    build_clinic_hourly_occupancy,
     build_frosters_hourly_patterns,
     build_frosters_last_4m,
+    build_kepler_hourly_with_location,
     build_locations_with_operational_units,
     build_pos_hourly_demand,
     build_store_piercer_sid_map,
@@ -193,11 +195,13 @@ def _build_derived_datasets(upload_dir: Path) -> None:
 
 def _feature_builders():
     return {
+        'FEATURES.KEPLER_HOURLY_PAST_4M': build_kepler_hourly_with_location,
         'FEATURES.LOCATIONS_WITH_OPERATIONAL_UNITS': build_locations_with_operational_units,
         'FEATURES.FROSTERS_LAST_4M': build_frosters_last_4m,
         'FEATURES.FROSTERS_HOURLY_PATTERNS': build_frosters_hourly_patterns,
         'FEATURES.POS_HOURLY_DEMAND_BY_STORE': build_pos_hourly_demand,
         'FEATURES.STORE_PIERCER_SID_MAP': build_store_piercer_sid_map,
+        'FEATURES.CLINIC_HOURLY_OCCUPANCY': build_clinic_hourly_occupancy,
     }
 
 
